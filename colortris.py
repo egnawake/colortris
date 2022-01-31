@@ -1,4 +1,5 @@
 import pygame
+import pygame.freetype
 import random
 
 
@@ -8,7 +9,10 @@ GRID_SIZE = (7, 10)
 RESOLUTION = (GRID_SIZE[0] * CELL_SIZE, GRID_SIZE[1] * CELL_SIZE)
 GRAVITY_INTERVAL = 1
 MOVE_INTERVAL = 0.15
+PIECE_SIZE = 28
+PIECE_OUTLINE_WIDTH = 4
 COLORS = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0)]
+SCORE_FONT_SIZE = 32
 
 
 # globals
@@ -20,6 +24,7 @@ can_move = True
 is_scoring = False
 should_spawn = True
 move_dir = last_move_dir = -1
+score = 0
 
 
 # piece functions
@@ -73,7 +78,7 @@ def draw_grid(screen, grid):
             p = grid[y][x]
             if not piece_is_empty(p):
                 center = (x * CELL_SIZE + CELL_SIZE / 2, y * CELL_SIZE + CELL_SIZE / 2)
-                pygame.draw.circle(screen, COLORS[piece_color(p)], center, 25, 4)
+                pygame.draw.circle(screen, COLORS[piece_color(p)], center, PIECE_SIZE, PIECE_OUTLINE_WIDTH)
 
 
 # game logic functions
@@ -131,56 +136,52 @@ def lock(grid):
 
     return new_grid
 
-def score(grid):
+def clear_pieces(grid):
     global is_scoring
     global should_spawn
+    global score
 
     new_grid = grid_copy(grid)
     done = True
 
+    start = 0
+    end = start + 1
+
+    # check horizontally
     for line in range(0, len(grid)):
-        start_idx = 0
-        end_idx = 0
-        last_color = -1
-        for c in range(0, len(grid[line])):
-            p = grid[line][c]
-            if last_color != piece_color(p):
-                if last_color != -1 and end_idx - start_idx >= 3:
-                    done = False
-                    for i in range(start_idx, end_idx):
-                        new_grid[line][i] = piece_empty()
-                last_color = piece_color(p)
-                start_idx = c
-                end_idx = c + 1
+        while start < len(grid[0]):
+            if end < len(grid[0]) and piece_color(grid[line][start]) == piece_color(grid[line][end]):
+                end = end + 1
+            elif piece_color(grid[line][start]) != -1 and (end - start) >= 3:
+                score += 1
+                done = False
+                for i in range(start, end):
+                    new_grid[line][i] = piece_empty()
+                start = end
+                end = start + 1
             else:
-                end_idx += 1
+                start = end
+                end = start + 1
+        start = 0
+        end = start + 1
 
-        if last_color != -1 and end_idx - start_idx >= 3:
-            done = False
-            for i in range(start_idx, end_idx):
-                new_grid[line][i] = piece_empty()
-
+    # check vertically
     for col in range(0, len(grid[0])):
-        start_idx = 0
-        end_idx = 0
-        last_color = -1
-        for c in range(0, len(grid)):
-            p = grid[c][col]
-            if last_color != piece_color(p):
-                if last_color != -1 and end_idx - start_idx >= 3:
-                    done = False
-                    for i in range(start_idx, end_idx):
-                        new_grid[i][col] = piece_empty()
-                last_color = piece_color(p)
-                start_idx = c
-                end_idx = c + 1
+        while start < len(grid):
+            if end < len(grid) and piece_color(grid[start][col]) == piece_color(grid[end][col]):
+                end = end + 1
+            elif piece_color(grid[start][col]) != -1 and (end - start) >= 3:
+                score += 1
+                done = False
+                for i in range(start, end):
+                    new_grid[i][col] = piece_empty()
+                start = end
+                end = start + 1
             else:
-                end_idx += 1
-
-        if last_color != -1 and end_idx - start_idx >= 3:
-            done = False
-            for i in range(start_idx, end_idx):
-                new_grid[i][col] = piece_empty()
+                start = end
+                end = start + 1
+        start = 0
+        end = start + 1
 
     if done:
         is_scoring = False
@@ -205,13 +206,19 @@ def main():
     global last_move_dir
     global move_dir
     global should_spawn
+    global score
 
+    # init pygame
     pygame.init()
     screen = pygame.display.set_mode((GRID_SIZE[0] * CELL_SIZE, GRID_SIZE[1] * CELL_SIZE))
+
+    # init font
+    font = pygame.freetype.Font("assets/PixelOperator.ttf")
 
     grid = grid_new(GRID_SIZE)
 
     while True:
+        # event handling
         for event in pygame.event.get():
             if (event.type == pygame.QUIT):
                 exit()
@@ -223,6 +230,8 @@ def main():
                     gravity_multiplier = 1
 
         keys = pygame.key.get_pressed()
+
+        # determining move direction
         if keys[pygame.K_LEFT]:
             move_dir = 0
         elif keys[pygame.K_RIGHT]:
@@ -238,7 +247,7 @@ def main():
             grid = lock(grid)
 
             if is_scoring:
-                grid = score(grid)
+                grid = clear_pieces(grid)
 
             if should_spawn:
                 grid = spawn_piece(grid)
@@ -269,6 +278,7 @@ def main():
 
         screen.fill((0, 0, 0))
         draw_grid(screen, grid)
+        font.render_to(screen, (4, 4), "Score: " + str(score), (255, 255, 255), size=SCORE_FONT_SIZE)
         pygame.display.flip()
 
 
